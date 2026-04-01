@@ -16,8 +16,8 @@ ALERT_TARGETS = ['person', 'elephant', 'tiger', 'man', 'woman']
 IGNORE_TARGETS = ['cat', 'dog']
 
 # Telegram Configuration (FILL THESE IN)
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
+TELEGRAM_BOT_TOKEN = "8705733135:AAEyMNPNUShsml95_w8keUWkjK-1SnQFfQk"
+TELEGRAM_CHAT_ID = "1802847236"
 
 # Global State
 active_phone_connection: WebSocket = None
