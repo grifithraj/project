@@ -44,29 +44,86 @@ def send_telegram_alert(message, image_path=None):
 # ==========================================
 html_content = """
 <!DOCTYPE html>
-<html><head><title>Sentinel Lens</title></head>
-<body style="background: black; color: white; text-align: center;">
-    <h2>Sentinel Lens Active</h2><p>Waiting for trigger...</p>
+<html>
+<head><title>Sentinel Lens</title></head>
+<body style="background: black; color: white; text-align: center; font-family: sans-serif;">
+    <h2>Sentinel Lens Active</h2>
+    
+    <h3 id="status" style="color: yellow; padding: 10px; border: 1px solid yellow; border-radius: 5px;">Connecting to Cloud...</h3>
+    
     <video id="video" width="100%" autoplay playsinline></video>
     <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
+        const statusText = document.getElementById('status');
+        
+        // 1. Start Camera
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; });
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { statusText.innerText = "❌ Camera access denied!"; statusText.style.color = "red"; });
 
+        // 2. Open Tunnel
         const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws');
+        
+        ws.onopen = () => { 
+            statusText.innerText = "🟢 Connected! Waiting for ESP32 trigger..."; 
+            statusText.style.color = "lime";
+            statusText.style.borderColor = "lime";
+        };
+        
+        ws.onclose = () => { 
+            statusText.innerText = "🔴 Disconnected from Render! Refresh page."; 
+            statusText.style.color = "red";
+            statusText.style.borderColor = "red";
+        };
+        
+        // 3. Listen for Trigger
         ws.onmessage = (event) => {
             if (event.data === "CAPTURE") {
-                canvas.getContext('2d').drawImage(video, 0, 0, 640, 480);
-                canvas.toBlob(blob => {
-                    const fd = new FormData(); fd.append("file", blob, "shot.jpg");
-                    fetch('/process', { method: "POST", body: fd });
-                }, 'image/jpeg', 0.8);
+                statusText.innerText = "📸 TRIGGERED! Snapping photo...";
+                statusText.style.color = "cyan";
+                
+                try {
+                    // Draw video to canvas
+                    canvas.getContext('2d').drawImage(video, 0, 0, 640, 480);
+                    
+                    // Convert canvas to image file
+                    canvas.toBlob(blob => {
+                        if (!blob) {
+                            statusText.innerText = "❌ Error: Failed to create image.";
+                            return;
+                        }
+                        
+                        statusText.innerText = "🚀 Uploading to AI Engine...";
+                        const fd = new FormData(); 
+                        fd.append("file", blob, "shot.jpg");
+                        
+                        // Send to Render
+                        fetch('/process', { method: "POST", body: fd })
+                        .then(response => response.json())
+                        .then(data => {
+                            statusText.innerText = "✅ AI Result: " + data.status;
+                            setTimeout(() => { 
+                                statusText.innerText = "🟢 Ready for next motion..."; 
+                                statusText.style.color = "lime"; 
+                            }, 4000);
+                        })
+                        .catch(err => {
+                            statusText.innerText = "❌ Upload Failed: " + err.message;
+                            statusText.style.color = "red";
+                        });
+                    }, 'image/jpeg', 0.8);
+                } catch (e) {
+                    statusText.innerText = "❌ Code Error: " + e.message;
+                    statusText.style.color = "red";
+                }
             }
         };
     </script>
-</body></html>
+</body>
+</html>
 """
 
 @app.get("/camera")
